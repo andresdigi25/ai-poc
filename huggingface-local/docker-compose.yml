@@ -1,0 +1,7 @@
+# docker-compose.yml
+version: "3.9"
+services:
+  hf-local:
+    build: .
+    volumes:
+      - ./.cache:/root/.cache  # Para no volver a descargar el modelo

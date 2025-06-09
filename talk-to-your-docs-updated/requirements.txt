@@ -1,0 +1,10 @@
+langchain
+langchain-community
+chromadb
+ollama
+llama-cpp-python
+transformers
+accelerate
+unstructured
+pypdf
+pymupdf
