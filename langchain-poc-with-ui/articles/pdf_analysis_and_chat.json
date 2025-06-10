@@ -1,0 +1,31 @@
+{
+  "url": "https://docs.docker.com/guides/genai-pdf-bot/",
+  "title": "PDF analysis and chat",
+  "authors": [],
+  "publish_date": "2025-02-27T08:51:59-08:00",
+  "text": "PDF analysis and chat\n\nThe generative AI (GenAI) guide teaches you how to containerize an existing GenAI application using Docker. In this guide, you’ll learn how to:\n\nContainerize and run a Python-based GenAI application\n\nSet up a local environment to run the complete GenAI stack locally for development\n\nStart by containerizing an existing GenAI application.",
+  "summary": "PDF analysis and chatThe generative AI (GenAI) guide teaches you how to containerize an existing GenAI application using Docker.\nIn this guide, you’ll learn how to:Containerize and run a Python-based GenAI applicationSet up a local environment to run the complete GenAI stack locally for developmentStart by containerizing an existing GenAI application.",
+  "keywords": [
+    "guide",
+    "analysis",
+    "existing",
+    "teaches",
+    "using",
+    "run",
+    "stack",
+    "application",
+    "tocontainerize",
+    "chat",
+    "youll",
+    "pdf",
+    "genai"
+  ],
+  "scraped_at": "2025-06-01T00:51:21.388202",
+  "top_image": "https://docs.docker.com/images/thumbnail.webp",
+  "images": [
+    "https://docs.docker.com/images/ai-stars.svg",
+    "https://docs.docker.com/images/thumbnail.webp"
+  ],
+  "movies": [],
+  "ollama_summary": "Sure! Here is a concise summary of the article in 3 sentences:\n\nThe article provides guidance on how to containerize an existing GenAI application using Docker, allowing users to run the complete GenAI stack locally for development. The process involves starting by containerizing the existing GenAI application and setting up a local environment to run the entire GenAI stack. Once containerized, the application can be easily deployed and run in a variety of environments."
+}
