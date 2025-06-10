@@ -1,0 +1,305 @@
+{
+    "name": "CoT Email Processor",
+    "nodes": [
+      {
+        "parameters": {
+          "authentication": "generic",
+          "protocol": "imap",
+          "host": "imap.gmail.com",
+          "port": 993,
+          "secure": true,
+          "email": "={{ $vars.EMAIL_USERNAME }}",
+          "password": "={{ $vars.EMAIL_PASSWORD }}",
+          "folder": "INBOX",
+          "searchCriteria": {
+            "isUnread": true,
+            "subject": "CoT"
+          },
+          "downloadAttachments": true,
+          "options": {
+            "allowUnauthorizedCerts": false,
+            "connTimeout": 10000,
+            "authTimeout": 5000,
+            "keepAlive": true
+          }
+        },
+        "id": "c5f5e2c5-8f4a-4b6b-9d8e-1a2b3c4d5e6f",
+        "name": "Email Trigger",
+        "type": "n8n-nodes-base.emailReadImap",
+        "typeVersion": 2,
+        "position": [240, 300],
+        "credentials": {
+          "imap": {
+            "id": "1",
+            "name": "Gmail IMAP"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict"
+            },
+            "conditions": [
+              {
+                "id": "attachment-exists",
+                "leftValue": "={{ $json.attachments }}",
+                "rightValue": "",
+                "operator": {
+                  "operation": "exists",
+                  "type": "array"
+                }
+              },
+              {
+                "id": "excel-file",
+                "leftValue": "={{ $json.attachments[0].filename }}",
+                "rightValue": "\\.(xlsx|xls)$",
+                "operator": {
+                  "operation": "regex",
+                  "type": "string"
+                }
+              }
+            ],
+            "combinator": "and"
+          }
+        },
+        "id": "a8b9c0d1-e2f3-4567-890a-bcdef1234567",
+        "name": "Check Excel Attachment",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [460, 300]
+      },
+      {
+        "parameters": {
+          "jsCode": "// Extract Excel file from attachments\nconst emailData = $input.all()[0].json;\nconst attachments = emailData.attachments || [];\n\n// Find Excel file\nconst excelFile = attachments.find(att => \n  att.filename && (att.filename.endsWith('.xlsx') || att.filename.endsWith('.xls'))\n);\n\nif (!excelFile) {\n  throw new Error('No Excel file found in attachments');\n}\n\n// Prepare data for API\nreturn {\n  filename: excelFile.filename,\n  fileData: excelFile.content,\n  sender: emailData.from.address,\n  subject: emailData.subject,\n  receivedDate: emailData.date,\n  messageId: emailData.messageId\n};"
+        },
+        "id": "b1c2d3e4-f5g6-7890-abcd-ef1234567890",
+        "name": "Extract Excel Data",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [680, 300]
+      },
+      {
+        "parameters": {
+          "url": "http://localhost:8000/upload-excel/",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Content-Type",
+                "value": "multipart/form-data"
+              }
+            ]
+          },
+          "sendBody": true,
+          "contentType": "multipart-form-data",
+          "bodyParameters": {
+            "parameters": [
+              {
+                "name": "file",
+                "parameterType": "formBinaryData",
+                "inputDataFieldName": "fileData"
+              }
+            ]
+          },
+          "options": {
+            "timeout": 30000,
+            "retry": {
+              "enabled": true,
+              "maxTries": 3
+            }
+          }
+        },
+        "id": "d4e5f6g7-h8i9-0123-4567-890abcdef123",
+        "name": "Upload to API",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.1,
+        "position": [900, 300]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict"
+            },
+            "conditions": [
+              {
+                "id": "success-response",
+                "leftValue": "={{ $json.result }}",
+                "rightValue": "",
+                "operator": {
+                  "operation": "exists",
+                  "type": "object"
+                }
+              }
+            ],
+            "combinator": "and"
+          }
+        },
+        "id": "e7f8g9h0-i1j2-3456-7890-abcdef123456",
+        "name": "Check Success",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [1120, 300]
+      },
+      {
+        "parameters": {
+          "url": "http://localhost:8000/chat/",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ]
+          },
+          "sendBody": true,
+          "bodyParameters": {
+            "parameters": [
+              {
+                "name": "question",
+                "value": "Analiza el último archivo procesado '{{ $('Extract Excel Data').item.json.filename }}'. ¿Cuántos new channels y new COTs se encontraron? ¿Cuántos registros se insertaron? Proporciona un resumen ejecutivo."
+              }
+            ]
+          }
+        },
+        "id": "f0g1h2i3-j4k5-6789-0123-456789abcdef",
+        "name": "AI Analysis",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.1,
+        "position": [1340, 200]
+      },
+      {
+        "parameters": {
+          "authentication": "generic",
+          "fromEmail": "={{ $vars.EMAIL_USERNAME }}",
+          "toEmail": "={{ $('Extract Excel Data').item.json.sender }}",
+          "subject": "✅ CoT Processing Completed: {{ $('Extract Excel Data').item.json.filename }}",
+          "emailFormat": "html",
+          "message": "=<!DOCTYPE html>\n<html>\n<head>\n    <style>\n        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }\n        .container { max-width: 600px; margin: 0 auto; padding: 20px; }\n        .header { background: #27ae60; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }\n        .content { background: #f9f9f9; padding: 20px; border: 1px solid #ddd; }\n        .stats { background: white; padding: 15px; margin: 15px 0; border-radius: 5px; border-left: 4px solid #3498db; }\n        .footer { background: #34495e; color: white; padding: 15px; text-align: center; border-radius: 0 0 8px 8px; font-size: 12px; }\n        .success { color: #27ae60; font-weight: bold; }\n        .highlight { background: #fff3cd; padding: 10px; border-radius: 5px; margin: 10px 0; }\n    </style>\n</head>\n<body>\n    <div class=\"container\">\n        <div class=\"header\">\n            <h2>✅ CoT Processing Completed Successfully</h2>\n        </div>\n        \n        <div class=\"content\">\n            <h3>📁 File Information</h3>\n            <div class=\"stats\">\n                <strong>File:</strong> {{ $('Extract Excel Data').item.json.filename }}<br>\n                <strong>Processed on:</strong> {{ $now.format('YYYY-MM-DD HH:mm:ss') }}<br>\n                <strong>Sent by:</strong> {{ $('Extract Excel Data').item.json.sender }}\n            </div>\n            \n            <h3>📊 Processing Results</h3>\n            <div class=\"stats\">\n                <ul>\n                    <li><strong>Total records:</strong> <span class=\"success\">{{ $('Upload to API').item.json.result.total_records }}</span></li>\n                    <li><strong>Records inserted:</strong> <span class=\"success\">{{ $('Upload to API').item.json.result.records_inserted }}</span></li>\n                    <li><strong>Records updated:</strong> <span class=\"success\">{{ $('Upload to API').item.json.result.records_updated }}</span></li>\n                    <li><strong>New Channels found:</strong> <span class=\"success\">{{ $('Upload to API').item.json.result.new_channels_found }}</span></li>\n                    <li><strong>New COTs found:</strong> <span class=\"success\">{{ $('Upload to API').item.json.result.new_cots_found }}</span></li>\n                </ul>\n            </div>\n            \n            <h3>🤖 AI Analysis</h3>\n            <div class=\"highlight\">\n                {{ $('AI Analysis').item.json.answer }}\n            </div>\n            \n            <h3>🆕 New Elements Identified</h3>\n            <div class=\"stats\">\n                {{#if $('Upload to API').item.json.result.new_channels.length}}\n                <p><strong>New Channels:</strong></p>\n                <ul>\n                    {{#each $('Upload to API').item.json.result.new_channels}}\n                    <li>{{ this }}</li>\n                    {{/each}}\n                </ul>\n                {{/if}}\n                \n                {{#if $('Upload to API').item.json.result.new_cots.length}}\n                <p><strong>New COTs:</strong></p>\n                <ul>\n                    {{#each $('Upload to API').item.json.result.new_cots}}\n                    <li>{{ this }}</li>\n                    {{/each}}\n                </ul>\n                {{/if}}\n            </div>\n        </div>\n        \n        <div class=\"footer\">\n            <p>Automated message from CoT Mapping System</p>\n            <p>Dashboard: <a href=\"http://localhost:8000/dashboard\" style=\"color: #3498db;\">http://localhost:8000/dashboard</a></p>\n        </div>\n    </div>\n</body>\n</html>",
+          "options": {}
+        },
+        "id": "g3h4i5j6-k7l8-9012-3456-789012345678",
+        "name": "Send Success Email",
+        "type": "n8n-nodes-base.emailSend",
+        "typeVersion": 2,
+        "position": [1560, 200],
+        "credentials": {
+          "smtp": {
+            "id": "2",
+            "name": "Gmail SMTP"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "authentication": "generic",
+          "fromEmail": "={{ $vars.EMAIL_USERNAME }}",
+          "toEmail": "={{ $('Extract Excel Data').item.json.sender }}",
+          "subject": "❌ CoT Processing Error: {{ $('Extract Excel Data').item.json.filename }}",
+          "emailFormat": "html",
+          "message": "=<!DOCTYPE html>\n<html>\n<head>\n    <style>\n        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }\n        .container { max-width: 600px; margin: 0 auto; padding: 20px; }\n        .header { background: #e74c3c; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }\n        .content { background: #f9f9f9; padding: 20px; border: 1px solid #ddd; }\n        .error { background: #f8d7da; color: #721c24; padding: 15px; margin: 15px 0; border-radius: 5px; border: 1px solid #f5c6cb; }\n        .solutions { background: #cce5ff; padding: 15px; margin: 15px 0; border-radius: 5px; }\n        .footer { background: #34495e; color: white; padding: 15px; text-align: center; border-radius: 0 0 8px 8px; font-size: 12px; }\n    </style>\n</head>\n<body>\n    <div class=\"container\">\n        <div class=\"header\">\n            <h2>❌ CoT Processing Error</h2>\n        </div>\n        \n        <div class=\"content\">\n            <h3>📁 File Information</h3>\n            <p><strong>File:</strong> {{ $('Extract Excel Data').item.json.filename }}</p>\n            <p><strong>Attempted on:</strong> {{ $now.format('YYYY-MM-DD HH:mm:ss') }}</p>\n            <p><strong>Sent by:</strong> {{ $('Extract Excel Data').item.json.sender }}</p>\n            \n            <h3>⚠️ Error Details</h3>\n            <div class=\"error\">\n                <strong>Error:</strong> {{ $('Upload to API').item.json.detail || 'Unknown processing error' }}\n            </div>\n            \n            <h3>🔧 Possible Solutions</h3>\n            <div class=\"solutions\">\n                <ul>\n                    <li>Verify that the Excel file has the correct columns (IC Channel, IC COT, New Channel, New COT)</li>\n                    <li>Ensure data format is valid (no special characters in critical fields)</li>\n                    <li>Check that the file is not corrupted</li>\n                    <li>Try uploading manually through the dashboard</li>\n                    <li>Contact the system administrator if the problem persists</li>\n                </ul>\n            </div>\n            \n            <p><strong>Next Steps:</strong> Please review the file and try sending it again. If the issue continues, contact technical support.</p>\n        </div>\n        \n        <div class=\"footer\">\n            <p>Automated message from CoT Mapping System</p>\n            <p>Dashboard: <a href=\"http://localhost:8000/dashboard\" style=\"color: #3498db;\">http://localhost:8000/dashboard</a></p>\n        </div>\n    </div>\n</body>\n</html>"
+        },
+        "id": "h6i7j8k9-l0m1-2345-6789-012345678901",
+        "name": "Send Error Email",
+        "type": "n8n-nodes-base.emailSend",
+        "typeVersion": 2,
+        "position": [1560, 400],
+        "credentials": {
+          "smtp": {
+            "id": "2",
+            "name": "Gmail SMTP"
+          }
+        }
+      }
+    ],
+    "connections": {
+      "Email Trigger": {
+        "main": [
+          [
+            {
+              "node": "Check Excel Attachment",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Check Excel Attachment": {
+        "main": [
+          [
+            {
+              "node": "Extract Excel Data",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Extract Excel Data": {
+        "main": [
+          [
+            {
+              "node": "Upload to API",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Upload to API": {
+        "main": [
+          [
+            {
+              "node": "Check Success",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Check Success": {
+        "main": [
+          [
+            {
+              "node": "AI Analysis",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Send Error Email",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "AI Analysis": {
+        "main": [
+          [
+            {
+              "node": "Send Success Email",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "settings": {
+      "executionOrder": "v1"
+    },
+    "staticData": null,
+    "tags": [],
+    "triggerCount": 1,
+    "updatedAt": "2025-01-20T10:00:00.000Z",
+    "versionId": "1"
+  }

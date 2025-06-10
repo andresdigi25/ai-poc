@@ -1,0 +1,125 @@
+{
+  "name": "Talk to Your Docs - S3 Triggered OCR & Summary",
+  "nodes": [
+    {
+      "parameters": {
+        "bucket": "your-s3-bucket-name",
+        "region": "us-east-1",
+        "events": [
+          "s3:ObjectCreated:*"
+        ]
+      },
+      "name": "S3 Trigger",
+      "type": "n8n-nodes-base.s3Trigger",
+      "typeVersion": 1,
+      "position": [
+        250,
+        300
+      ],
+      "credentials": {
+        "aws": {
+          "id": "aws-credentials-id",
+          "name": "AWS account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "bucketName": "your-s3-bucket-name",
+        "fileKey": "={{ $json[\"key\"] }}",
+        "region": "us-east-1",
+        "binaryPropertyName": "data"
+      },
+      "name": "S3 Get File",
+      "type": "n8n-nodes-base.s3",
+      "typeVersion": 1,
+      "position": [
+        450,
+        300
+      ],
+      "credentials": {
+        "aws": {
+          "id": "aws-credentials-id",
+          "name": "AWS account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "http://fastapi:8000/process",
+        "method": "POST",
+        "responseFormat": "json",
+        "options": {
+          "bodyContentType": "multipart-form-data"
+        },
+        "bodyParametersUi": {
+          "parameter": [
+            {
+              "name": "file",
+              "value": "={{ $binary.data }}"
+            }
+          ]
+        }
+      },
+      "name": "FastAPI Process",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [
+        650,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "no-reply@example.com",
+        "toEmail": "={{ $env.EMAIL_TO }}",
+        "subject": "Resumen de {{ $json[\"filename\"] || \"Documento\" }}",
+        "text": "Resumen generado:\n\n{{ $json[\"summary\"] }}",
+        "html": "<h2>Resumen:</h2><p>{{ $json[\"summary\"] }}</p><h3>Im\u00e1genes:</h3>{{#each $json.images}}<img src='{{this}}' width='200'/><br/>{{/each}}"
+      },
+      "name": "Send Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [
+        850,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "S3 Trigger": {
+      "main": [
+        [
+          {
+            "node": "S3 Get File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S3 Get File": {
+      "main": [
+        [
+          {
+            "node": "FastAPI Process",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "FastAPI Process": {
+      "main": [
+        [
+          {
+            "node": "Send Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false
+}

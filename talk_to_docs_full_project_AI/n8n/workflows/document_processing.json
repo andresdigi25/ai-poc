@@ -1,0 +1,130 @@
+{
+  "name": "Document Processing Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "/documents",
+        "options": {}
+      },
+      "name": "FTP Trigger",
+      "type": "n8n-nodes-base.ftpTrigger",
+      "typeVersion": 1,
+      "position": [
+        250,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "http://api:8000/documents/upload",
+        "options": {
+          "bodyContentType": "multipart-form-data"
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "file",
+              "value": "={{$json}}"
+            }
+          ]
+        }
+      },
+      "name": "Upload to API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        450,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.status}}",
+              "value2": "completed"
+            }
+          ]
+        }
+      },
+      "name": "Check Status",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        650,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{$env.EMAIL_FROM}}",
+        "toEmail": "={{$env.NOTIFICATION_EMAIL}}",
+        "subject": "Document Processing Complete",
+        "text": "=Document {{$json.filename}} has been processed successfully.\n\nSummary:\n{{$json.summary}}\n\nYou can view the full results in the dashboard."
+      },
+      "name": "Send Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [
+        850,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "message": "=Error processing document {{$json.filename}}: {{$json.error_message}}"
+      },
+      "name": "Error Notification",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [
+        850,
+        400
+      ]
+    }
+  ],
+  "connections": {
+    "FTP Trigger": {
+      "main": [
+        [
+          {
+            "node": "Upload to API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload to API": {
+      "main": [
+        [
+          {
+            "node": "Check Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Status": {
+      "main": [
+        [
+          {
+            "node": "Send Email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Error Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+} 
