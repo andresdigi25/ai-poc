@@ -5,3 +5,4 @@ sqlalchemy
 marshmallow
 marshmallow-jsonschema
 ollama
+python-multipart
