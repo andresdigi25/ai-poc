@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ASCII Art Music Canvas</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>ASCII Art Music Canvas</h1>
+            <p>Draw with ASCII characters and create music!</p>
+        </header>
+        
+        <div class="controls">
+            <button id="patternBtn" class="btn">Pattern: Stars ✨</button>
+            <button id="clearBtn" class="btn clear-btn">Clear Canvas</button>
+            <div class="volume-control">
+                <label for="volumeSlider">Volume:</label>
+                <input type="range" id="volumeSlider" min="0" max="100" value="50">
+            </div>
+        </div>
+        
+        <div class="canvas-container">
+            <div id="asciiCanvas" class="ascii-canvas"></div>
+        </div>
+        
+        <div class="info">
+            <p>Click and drag to draw • Each character plays a musical note • Switch patterns for different sounds</p>
+        </div>
+    </div>
+    
+    <script src="script.js"></script>
+</body>
+</html>

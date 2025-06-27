@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Webcam Emoji Art</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: 'Courier New', monospace;
+            background: #000;
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 100vw;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .controls {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        
+        button {
+            padding: 10px 20px;
+            background: #333;
+            color: #fff;
+            border: 1px solid #555;
+            border-radius: 5px;
+            cursor: pointer;
+            font-family: inherit;
+        }
+        
+        button:hover {
+            background: #555;
+        }
+        
+        button:disabled {
+            background: #222;
+            color: #666;
+            cursor: not-allowed;
+        }
+        
+        #video {
+            display: none;
+        }
+        
+        #canvas {
+            display: none;
+        }
+        
+        #output {
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            line-height: 1.1;
+            white-space: pre;
+            background: #111;
+            padding: 15px;
+            border: 1px solid #333;
+            border-radius: 5px;
+            overflow: auto;
+            width: 90vw;
+            max-width: 1200px;
+            box-sizing: border-box;
+            min-height: 400px;
+            word-break: keep-all;
+            margin: 10px auto;
+        }
+        
+        .status {
+            margin: 10px 0;
+            padding: 10px;
+            background: #222;
+            border-radius: 5px;
+            text-align: center;
+        }
+        
+        .error {
+            background: #400;
+            color: #f88;
+        }
+        
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+            
+            #output {
+                font-size: 10px;
+                width: 95vw;
+                padding: 10px;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            #output {
+                font-size: 8px;
+                width: 98vw;
+                padding: 8px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Webcam Emoji Art</h1>
+        
+        <div class="controls">
+            <button id="startBtn">Start Camera</button>
+            <button id="stopBtn" disabled>Stop Camera</button>
+            <button id="snapshotBtn" disabled>Save Snapshot</button>
+        </div>
+        
+        <div id="status" class="status">Click "Start Camera" to begin</div>
+        
+        <video id="video" autoplay muted playsinline></video>
+        <canvas id="canvas"></canvas>
+        <div id="output"></div>
+    </div>
+
+    <script>
+        class EmojiWebcam {
+            constructor() {
+                this.video = document.getElementById('video');
+                this.canvas = document.getElementById('canvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.output = document.getElementById('output');
+                this.status = document.getElementById('status');
+                
+                this.startBtn = document.getElementById('startBtn');
+                this.stopBtn = document.getElementById('stopBtn');
+                this.snapshotBtn = document.getElementById('snapshotBtn');
+                
+                this.stream = null;
+                this.animationFrame = null;
+                this.isProcessing = false;
+                
+                // Emoji mapping from darkest to lightest
+                this.emojis = ['⬛', '🔳', '◼️', '▪️', '▫️', '◻️', '⬜'];
+                
+                // Performance settings
+                this.targetWidth = 80;  // Target width in characters
+                this.maxFPS = 15;       // Limit FPS for performance
+                this.lastFrameTime = 0;
+                this.frameInterval = 1000 / this.maxFPS;
+                
+                this.initEventListeners();
+                // Don't call updateCanvasSize here - wait for elements to be ready
+                window.addEventListener('resize', () => this.updateCanvasSize());
+            }
+            
+            initEventListeners() {
+                this.startBtn.addEventListener('click', () => this.startCamera());
+                this.stopBtn.addEventListener('click', () => this.stopCamera());
+                this.snapshotBtn.addEventListener('click', () => this.saveSnapshot());
+            }
+            
+            updateCanvasSize() {
+                // Use window width as base, with fallback to output element width
+                const windowWidth = window.innerWidth;
+                const outputWidth = this.output.clientWidth;
+                const effectiveWidth = Math.max(outputWidth, windowWidth * 0.9);
+                
+                // Adjust character width based on font size
+                const fontSize = parseInt(getComputedStyle(this.output).fontSize);
+                const charWidth = fontSize * 0.6; // Monospace character width approximation
+                
+                this.targetWidth = Math.max(40, Math.min(120, Math.floor(effectiveWidth / charWidth)));
+                console.log('Target width:', this.targetWidth, 'effective width:', effectiveWidth, 'char width:', charWidth);
+            }
+            
+            async startCamera() {
+                try {
+                    this.updateStatus('Requesting camera access...');
+                    
+                    this.stream = await navigator.mediaDevices.getUserMedia({
+                        video: {
+                            width: { ideal: 640 },
+                            height: { ideal: 480 },
+                            facingMode: 'user'
+                        }
+                    });
+                    
+                    this.video.srcObject = this.stream;
+                    
+                    this.video.addEventListener('loadedmetadata', () => {
+                        this.canvas.width = this.video.videoWidth;
+                        this.canvas.height = this.video.videoHeight;
+                        console.log('Video dimensions:', this.video.videoWidth, 'x', this.video.videoHeight);
+                        
+                        // Update canvas size now that we have video dimensions
+                        // Add small delay to ensure layout is complete
+                        setTimeout(() => {
+                            this.updateCanvasSize();
+                            this.startProcessing();
+                        }, 200);
+                        this.updateButtons(true);
+                        this.updateStatus('Camera active - Processing frames...');
+                    });
+                    
+                } catch (error) {
+                    this.updateStatus(`Camera access denied: ${error.message}`, true);
+                    console.error('Camera error:', error);
+                }
+            }
+            
+            stopCamera() {
+                if (this.stream) {
+                    this.stream.getTracks().forEach(track => track.stop());
+                    this.stream = null;
+                }
+                
+                if (this.animationFrame) {
+                    cancelAnimationFrame(this.animationFrame);
+                    this.animationFrame = null;
+                }
+                
+                this.video.srcObject = null;
+                this.output.textContent = '';
+                this.updateButtons(false);
+                this.updateStatus('Camera stopped');
+            }
+            
+            startProcessing() {
+                const processFrame = (timestamp) => {
+                    if (!this.stream) return;
+                    
+                    // Limit frame rate for performance
+                    if (timestamp - this.lastFrameTime < this.frameInterval) {
+                        this.animationFrame = requestAnimationFrame(processFrame);
+                        return;
+                    }
+                    
+                    this.lastFrameTime = timestamp;
+                    
+                    if (!this.isProcessing) {
+                        this.isProcessing = true;
+                        this.processVideoFrame();
+                        this.isProcessing = false;
+                    }
+                    
+                    this.animationFrame = requestAnimationFrame(processFrame);
+                };
+                
+                this.animationFrame = requestAnimationFrame(processFrame);
+            }
+            
+            processVideoFrame() {
+                if (this.video.readyState !== this.video.HAVE_ENOUGH_DATA) {
+                    console.log('Video not ready, readyState:', this.video.readyState);
+                    return;
+                }
+                
+                try {
+                    // Draw video frame to canvas with horizontal flip to match camera preview
+                    this.ctx.save();
+                    this.ctx.scale(-1, 1);
+                    this.ctx.drawImage(this.video, -this.canvas.width, 0, this.canvas.width, this.canvas.height);
+                    this.ctx.restore();
+                    
+                    // Calculate target dimensions maintaining aspect ratio
+                    const aspectRatio = this.video.videoHeight / this.video.videoWidth;
+                    const targetHeight = Math.max(1, Math.floor(this.targetWidth * aspectRatio * 0.5)); // 0.5 for character aspect ratio, min 1
+                    
+                    console.log('Processing frame - target dimensions:', this.targetWidth, 'x', targetHeight);
+                    
+                    // Get image data with reduced resolution for performance
+                    const imageData = this.ctx.getImageData(0, 0, this.canvas.width, this.canvas.height);
+                    const emojiArt = this.convertToEmoji(imageData, this.targetWidth, targetHeight);
+                    
+                    if (emojiArt && emojiArt.length > 0) {
+                        this.output.textContent = emojiArt;
+                        console.log('Emoji art generated, length:', emojiArt.length);
+                    } else {
+                        console.log('No emoji art generated');
+                    }
+                } catch (error) {
+                    console.error('Error processing frame:', error);
+                }
+            }
+            
+            convertToEmoji(imageData, width, height) {
+                const data = imageData.data;
+                const sourceWidth = imageData.width;
+                const sourceHeight = imageData.height;
+                
+                console.log('Converting to emoji - source:', sourceWidth, 'x', sourceHeight, 'target:', width, 'x', height);
+                
+                if (width <= 0 || height <= 0) {
+                    console.error('Invalid dimensions:', width, height);
+                    return '❌ Invalid dimensions';
+                }
+                
+                let result = '';
+                
+                // Calculate sampling steps
+                const xStep = sourceWidth / width;
+                const yStep = sourceHeight / height;
+                
+                for (let y = 0; y < height; y++) {
+                    for (let x = 0; x < width; x++) {
+                        // Sample pixel from source image
+                        const sourceX = Math.floor(x * xStep);
+                        const sourceY = Math.floor(y * yStep);
+                        const pixelIndex = (sourceY * sourceWidth + sourceX) * 4;
+                        
+                        // Bounds check
+                        if (pixelIndex >= 0 && pixelIndex < data.length - 3) {
+                            // Get RGB values
+                            const r = data[pixelIndex] || 0;
+                            const g = data[pixelIndex + 1] || 0;
+                            const b = data[pixelIndex + 2] || 0;
+                            
+                            // Calculate brightness (luminance)
+                            const brightness = (r * 0.299 + g * 0.587 + b * 0.114) / 255;
+                            
+                            // Map brightness to emoji (invert for better contrast)
+                            const emojiIndex = Math.min(
+                                this.emojis.length - 1,
+                                Math.floor((1 - brightness) * this.emojis.length)
+                            );
+                            
+                            result += this.emojis[emojiIndex];
+                        } else {
+                            result += this.emojis[0]; // Default to darkest emoji
+                        }
+                    }
+                    result += '\n';
+                }
+                
+                console.log('Generated emoji art with', result.split('\n').length - 1, 'lines');
+                return result;
+            }
+            
+            saveSnapshot() {
+                if (!this.output.textContent || this.output.textContent.trim().length === 0) {
+                    this.updateStatus('No emoji art to save!', true);
+                    return;
+                }
+                
+                const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+                const filename = `emoji-snapshot-${timestamp}.txt`;
+                
+                const content = this.output.textContent;
+                console.log('Saving snapshot with', content.length, 'characters');
+                
+                const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                
+                URL.revokeObjectURL(url);
+                this.updateStatus(`Snapshot saved as ${filename}`);
+            }
+            
+            updateButtons(cameraActive) {
+                this.startBtn.disabled = cameraActive;
+                this.stopBtn.disabled = !cameraActive;
+                this.snapshotBtn.disabled = !cameraActive;
+            }
+            
+            updateStatus(message, isError = false) {
+                this.status.textContent = message;
+                this.status.className = isError ? 'status error' : 'status';
+            }
+        }
+        
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            // Add small delay to ensure DOM is fully rendered
+            setTimeout(() => {
+                new EmojiWebcam();
+            }, 100);
+        });
+    </script>
+</body>
+</html>
